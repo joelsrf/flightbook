@@ -29,7 +29,20 @@ export class FlightStore {
   
   // Public filter state
   public filter = signal<FlightFilter>(new FlightFilter());
-  
+
+  /**
+   * Bumped whenever the logbook the API would return changes - a flight
+   * created, edited or deleted, or the shared filter moved. HomeStore and
+   * StatisticStore derive their figures from those same endpoints and cache
+   * them for the session, so this is what tells them their copy is stale.
+   */
+  public revision = signal(0);
+
+  private bumpRevision(): void {
+    this.revision.update(value => value + 1);
+  }
+
+
   // Default limit for pagination
   public defaultLimit = 25;
   
@@ -40,13 +53,18 @@ export class FlightStore {
   public filtered = computed(() => this.isFiltered());
   constructor() {}
   
-  getFlights({ limit = null, offset = null, store = true, clearStore = false }: 
-    { limit?: number, offset?: number, store?: boolean, clearStore?: boolean } = {}): Observable<Flight[]> {
-    
+  /**
+   * @param applyFilter pass false to ignore the shared flight-list filter -
+   * the statistics page reports all-time figures regardless of what the user
+   * last filtered the list by, and has no filter control of its own.
+   */
+  getFlights({ limit = null, offset = null, store = true, clearStore = false, applyFilter = true }:
+    { limit?: number, offset?: number, store?: boolean, clearStore?: boolean, applyFilter?: boolean } = {}): Observable<Flight[]> {
+
     this.state.update(state => ({ ...state, loading: true }));
-    
+
     // Create params
-    let params: HttpParams = this.createFilterParams();
+    let params: HttpParams = applyFilter ? this.createFilterParams() : new HttpParams();
     if (limit) {
       params = params.append('limit', limit.toString());
     }
@@ -110,10 +128,15 @@ export class FlightStore {
     );
   }
   
-  getStatistics(type: string): Observable<FlightStatistic[]> {
-    let params: HttpParams = this.createFilterParams();
+  /**
+   * @param applyFilter pass false to ignore the shared flight-list filter.
+   * The dashboard needs all-time totals regardless of what the user last
+   * filtered the flight list by.
+   */
+  getStatistics(type: string, applyFilter: boolean = true): Observable<FlightStatistic[]> {
+    let params: HttpParams = applyFilter ? this.createFilterParams() : new HttpParams();
     params = params.append('type', type);
-    
+
     return this.http.get<FlightStatistic[]>(`${environment.baseUrl}/v2/flights/statistic`, { params });
   }
   
@@ -136,6 +159,7 @@ export class FlightStore {
           loading: false,
           error: null
         }));
+        this.bumpRevision();
       }),
       // After posting the flight, get the updated flight list
       concatMap((response: Flight) => {
@@ -178,6 +202,7 @@ export class FlightStore {
               error: null
             };
           });
+          this.bumpRevision();
         },
         error: (error) => {
           this.state.update(state => ({ 
@@ -201,6 +226,7 @@ export class FlightStore {
               loading: false,
               error: null
             }));
+            this.bumpRevision();
           }),
           // After posting the flight, get the updated flight list
           concatMap((response: Flight) => {
@@ -222,10 +248,12 @@ export class FlightStore {
   
   updateFilter(filter: Partial<FlightFilter>): void {
     this.filter.update(currentFilter => ({ ...currentFilter, ...filter }));
+    this.bumpRevision();
   }
   
   resetFilter(): void {
     this.filter.set(new FlightFilter());
+    this.bumpRevision();
   }
   
   clearFlights(): void {

@@ -1,6 +1,9 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
-import { MenuController, NavController, AlertController, LoadingController, IonContent, IonItem, IonInput, IonButton, IonFooter, IonInputPasswordToggle } from '@ionic/angular/standalone';
+import { NavController, AlertController, LoadingController, IonContent, IonInput, IonButton, IonIcon } from '@ionic/angular/standalone';
+import { UpperCasePipe } from '@angular/common';
+import { addIcons } from 'ionicons';
+import { eyeOutline, eyeOffOutline } from 'ionicons/icons';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Capacitor } from '@capacitor/core';
@@ -24,12 +27,11 @@ import { ActivatedRoute, Router } from '@angular/router';
     imports: [
         FormsModule,
         TranslateModule,
+        UpperCasePipe,
         IonContent,
-        IonItem,
         IonInput,
         IonButton,
-        IonFooter,
-        IonInputPasswordToggle
+        IonIcon
     ]
 })
 export class LoginPage implements OnInit, OnDestroy {
@@ -40,9 +42,19 @@ export class LoginPage implements OnInit, OnDestroy {
     };
     version = '';
 
+    readonly languages = ['fr', 'de', 'en', 'it'];
+    showPassword = false;
+
+    get currentLang(): string {
+        return this.translate.currentLang;
+    }
+
+    togglePassword() {
+        this.showPassword = !this.showPassword;
+    }
+
     constructor(
         private translate: TranslateService,
-        private menuCtrl: MenuController,
         private navCtrl: NavController,
         private accountService: AccountService,
         private newsStore: NewsStore,
@@ -52,8 +64,8 @@ export class LoginPage implements OnInit, OnDestroy {
         private route: ActivatedRoute,
         private router: Router
     ) {
-        this.menuCtrl.enable(false);
         this.defineVersion();
+        addIcons({ eyeOutline, eyeOffOutline });
     }
 
     ngOnInit() {
@@ -114,12 +126,11 @@ export class LoginPage implements OnInit, OnDestroy {
                     await loading.dismiss();
                     localStorage.setItem('access_token', resp.access_token);
                     localStorage.setItem('refresh_token', resp.refresh_token);
-                    this.menuCtrl.enable(true);
                     this.loginData.email = null;
                     this.loginData.password = null;
                     if (Capacitor.isNativePlatform()) {
-                        // For native, navigate to news page
-                        this.router.navigate([`news`], { replaceUrl: true });
+                        // For native, navigate to home page
+                        this.router.navigate([`home`], { replaceUrl: true });
                     } else {
                         // For web, navigate to home page
                         this.navigationService.back();
@@ -228,13 +239,5 @@ export class LoginPage implements OnInit, OnDestroy {
             }
         });
         return true;
-    }
-
-    changeEmail(event: any) {
-        this.loginData.email = event.target.value;
-    }
-
-    changePassword(event: any) {
-        this.loginData.password = event.target.value;
     }
 }
